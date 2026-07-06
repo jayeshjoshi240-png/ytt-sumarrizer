@@ -167,23 +167,28 @@
         actionBtn.disabled = true;
 
         try {
-            // Extract Video ID
             const match = urlInput.match(/(?:youtu\.be\/|v=|\/)([0-9A-Za-z_-]{11})/);
             if (!match) throw new Error("Invalid YouTube URL format.");
             const videoId = match[1];
 
             loaderStatus.innerHTML = "⏳ <i>Bypassing server blocks and fetching transcript...</i>";
 
-            // Fetch via CORS proxy
+            // Swapped to AllOrigins - a much more stable and reliable proxy
             const targetUrl = encodeURIComponent(`https://youtube-transcript.ai/transcript/${videoId}.txt`);
-            const transcriptRes = await fetch(`https://corsproxy.io/?${targetUrl}`);
+            const transcriptRes = await fetch(`https://api.allorigins.win/raw?url=${targetUrl}`);
             
-            if (!transcriptRes.ok) throw new Error("Captions are disabled or unavailable for this video.");
+            if (!transcriptRes.ok) {
+                throw new Error("Captions are completely disabled by the creator for this specific video.");
+            }
             const transcriptData = await transcriptRes.text();
+
+            // Safety check: If proxy sends a raw HTML error page instead of text
+            if (transcriptData.includes("<!DOCTYPE html>")) {
+                 throw new Error("Proxy server error. Please try again in a moment.");
+            }
 
             loaderStatus.innerHTML = "⏳ <i>Transcript secured! Generating AI insights...</i>";
 
-            // Send to backend
             const response = await fetch('/api/summarize', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
