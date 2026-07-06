@@ -171,20 +171,39 @@
             if (!match) throw new Error("Invalid YouTube URL format.");
             const videoId = match[1];
 
-            loaderStatus.innerHTML = "⏳ <i>Bypassing server blocks and fetching transcript...</i>";
+            loaderStatus.innerHTML = "⏳ <i>Routing request through secure proxy network...</i>";
 
-            // Swapped to AllOrigins - a much more stable and reliable proxy
             const targetUrl = encodeURIComponent(`https://youtube-transcript.ai/transcript/${videoId}.txt`);
-            const transcriptRes = await fetch(`https://api.allorigins.win/raw?url=${targetUrl}`);
             
-            if (!transcriptRes.ok) {
-                throw new Error("Captions are completely disabled by the creator for this specific video.");
-            }
-            const transcriptData = await transcriptRes.text();
+            // Fault Tolerance: An array of different proxies to try
+            const proxies = [
+                `https://api.codetabs.com/v1/proxy?quest=`,
+                `https://corsproxy.io/?`,
+                `https://api.allorigins.win/raw?url=`
+            ];
 
-            // Safety check: If proxy sends a raw HTML error page instead of text
-            if (transcriptData.includes("<!DOCTYPE html>")) {
-                 throw new Error("Proxy server error. Please try again in a moment.");
+            let transcriptData = null;
+
+            // Loop through the proxies. If an adblocker kills one, it immediately tries the next.
+            for (const proxy of proxies) {
+                try {
+                    const transcriptRes = await fetch(proxy + targetUrl);
+                    if (transcriptRes.ok) {
+                        const text = await transcriptRes.text();
+                        // Verify it is actual text and not an HTML error page
+                        if (!text.includes("<!DOCTYPE html>")) {
+                            transcriptData = text;
+                            break; // We got the data! Stop the loop.
+                        }
+                    }
+                } catch (err) {
+                    console.warn(`Proxy ${proxy} was blocked. Trying next...`);
+                }
+            }
+
+            // If ALL proxies fail or get blocked by the browser
+            if (!transcriptData) {
+                throw new Error("Network Blocked. Please temporarily turn off your Adblocker/Browser Shields for this site and try again.");
             }
 
             loaderStatus.innerHTML = "⏳ <i>Transcript secured! Generating AI insights...</i>";
@@ -196,7 +215,11 @@
             });
 
             const data = await response.json();
-            if (data.error) throw new Error(data.error);
+            
+            // Handle backend/Gemini errors
+            if (data.error || !response.ok) {
+                throw new Error(data.error || "Gemini AI failed to generate a summary.");
+            }
 
             summaryText.innerHTML = parseMarkdown(data.summary);
             outputContainer.style.display = "block";
