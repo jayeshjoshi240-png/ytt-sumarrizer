@@ -165,61 +165,18 @@
         outputContainer.style.display = "none";
         loaderStatus.style.display = "block";
         actionBtn.disabled = true;
+        loaderStatus.innerHTML = "⏳ <i>Extracting transcript and generating AI summary...</i>";
 
         try {
-            const match = urlInput.match(/(?:youtu\.be\/|v=|\/)([0-9A-Za-z_-]{11})/);
-            if (!match) throw new Error("Invalid YouTube URL format.");
-            const videoId = match[1];
-
-            loaderStatus.innerHTML = "⏳ <i>Routing request through secure proxy network...</i>";
-
-            const targetUrl = encodeURIComponent(`https://youtube-transcript.ai/transcript/${videoId}.txt`);
-            
-            // Fault Tolerance: An array of different proxies to try
-            const proxies = [
-                `https://api.codetabs.com/v1/proxy?quest=`,
-                `https://corsproxy.io/?`,
-                `https://api.allorigins.win/raw?url=`
-            ];
-
-            let transcriptData = null;
-
-            // Loop through the proxies. If an adblocker kills one, it immediately tries the next.
-            for (const proxy of proxies) {
-                try {
-                    const transcriptRes = await fetch(proxy + targetUrl);
-                    if (transcriptRes.ok) {
-                        const text = await transcriptRes.text();
-                        // Verify it is actual text and not an HTML error page
-                        if (!text.includes("<!DOCTYPE html>")) {
-                            transcriptData = text;
-                            break; // We got the data! Stop the loop.
-                        }
-                    }
-                } catch (err) {
-                    console.warn(`Proxy ${proxy} was blocked. Trying next...`);
-                }
-            }
-
-            // If ALL proxies fail or get blocked by the browser
-            if (!transcriptData) {
-                throw new Error("Network Blocked. Please temporarily turn off your Adblocker/Browser Shields for this site and try again.");
-            }
-
-            loaderStatus.innerHTML = "⏳ <i>Transcript secured! Generating AI insights...</i>";
-
+            // Send the URL straight to your backend
             const response = await fetch('/api/summarize', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ transcriptText: transcriptData })
+                body: JSON.stringify({ videoUrl: urlInput })
             });
 
             const data = await response.json();
-            
-            // Handle backend/Gemini errors
-            if (data.error || !response.ok) {
-                throw new Error(data.error || "Gemini AI failed to generate a summary.");
-            }
+            if (data.error) throw new Error(data.error);
 
             summaryText.innerHTML = parseMarkdown(data.summary);
             outputContainer.style.display = "block";
@@ -231,5 +188,4 @@
         }
     }
 </script>
-</body>
 </html>
